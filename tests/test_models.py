@@ -15,13 +15,13 @@ class TestMedicalDocument:
             id="test_001",
             title="Test Document",
             content="This is test content.",
-            source_url="https://example.com/test",
-            passage_text="Test passage",
             vector=[0.1, 0.2, 0.3],
-            created_at=datetime.now()
+            created_at=datetime.now(),
+            url="https://example.com/test"
         )
         assert doc.id == "test_001"
         assert doc.title == "Test Document"
+        assert doc.url == "https://example.com/test"
         assert len(doc.vector) == 3
     
     def test_empty_id_validation(self):
@@ -31,10 +31,9 @@ class TestMedicalDocument:
                 id="",
                 title="Test",
                 content="Content",
-                source_url="https://example.com",
-                passage_text="Passage",
                 vector=[0.1],
-                created_at=datetime.now()
+                created_at=datetime.now(),
+                url="https://example.com"
             )
     
     def test_empty_vector_validation(self):
@@ -44,11 +43,33 @@ class TestMedicalDocument:
                 id="test_001",
                 title="Test",
                 content="Content",
-                source_url="https://example.com",
-                passage_text="Passage",
                 vector=[],
-                created_at=datetime.now()
+                created_at=datetime.now(),
+                url="https://example.com"
             )
+    
+    def test_document_with_url(self):
+        """Test creating a document with URL."""
+        doc = MedicalDocument(
+            id="test_002",
+            title="Document with URL",
+            content="This document has a URL.",
+            vector=[0.1, 0.2, 0.3],
+            created_at=datetime.now(),
+            url="https://example.com/medical-paper"
+        )
+        assert doc.url == "https://example.com/medical-paper"
+    
+    def test_document_without_url(self):
+        """Test creating a document without URL."""
+        doc = MedicalDocument(
+            id="test_003",
+            title="Document without URL",
+            content="This document has no URL.",
+            vector=[0.1, 0.2, 0.3],
+            created_at=datetime.now()
+        )
+        assert doc.url is None
 
 
 class TestMedicalQA:
@@ -60,11 +81,12 @@ class TestMedicalQA:
             id="qa_001",
             question="What is test?",
             answer="Test is a procedure.",
-            context="Medical context",
-            vector=[0.1, 0.2, 0.3]
+            vector=[0.1, 0.2, 0.3],
+            document_id="doc_001"
         )
         assert qa.id == "qa_001"
         assert qa.question == "What is test?"
+        assert qa.document_id == "doc_001"
         assert len(qa.vector) == 3
     
     def test_empty_question_validation(self):
@@ -74,8 +96,8 @@ class TestMedicalQA:
                 id="qa_001",
                 question="",
                 answer="Answer",
-                context="Context",
-                vector=[0.1]
+                vector=[0.1],  
+                document_id="doc_001"
             )
     
     def test_empty_answer_validation(self):
@@ -85,8 +107,8 @@ class TestMedicalQA:
                 id="qa_001",
                 question="Question?",
                 answer="",
-                context="Context",
-                vector=[0.1]
+                vector=[0.1],
+                document_id="doc_001"
             )
 
 

@@ -37,6 +37,8 @@ dependencies = [
     "transformers>=4.20.0",
     "tqdm>=4.64.0",
     "huggingface-hub>=0.15.0",
+    "streamlit>=1.40.1",
+    "plotly>=6.2.0",
 ]
 
 [project.optional-dependencies]
@@ -53,8 +55,11 @@ docs = [
     "sphinx-rtd-theme>=1.0.0",
     "myst-parser>=0.18.0",
 ]
+sentence-transformers = [
+    "sentence-transformers>=2.0.0",
+]
 all = [
-    "loma-dataset[dev,docs]",
+    "loma-dataset[dev,docs,sentence-transformers]",
 ]
 
 [project.urls]
@@ -122,6 +127,7 @@ module = [
     "transformers.*",
     "tqdm.*",
     "huggingface_hub.*",
+    "sentence_transformers.*",
 ]
 ignore_missing_imports = true
 
@@ -159,4 +165,9 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
 ]

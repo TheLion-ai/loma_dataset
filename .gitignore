@@ -172,3 +172,5 @@ example_*.db
 test_*.db
 miriad_*.db
 *.db
+*.db-shm
+*.db-wal

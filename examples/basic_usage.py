@@ -36,6 +36,7 @@ def main():
         content="Hypertension is a common cardiovascular condition that affects millions of people worldwide. It is characterized by persistently elevated blood pressure levels.",
         vector=[0.1, 0.2, 0.3, 0.4, 0.5],  # Example 5-dimensional vector
         created_at=datetime.now(),
+        url="https://example.com/hypertension-research",
         year=2024,
         specialty="Cardiology"
     )

@@ -22,18 +22,18 @@ logger = logging.getLogger(__name__)
 def main():
     """Run MIRIAD dataset processing example."""
     # Create database path
-    db_path = Path("miriad_medical.db")
+    db_path = Path("miriad_medical_minlm.db")
 
     # Configuration
     config = ProcessingConfig(
-        model_name="AleksanderObuchowski/medembed-small-onnx",
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
         batch_size=32,
         max_length=512,
         device="cpu",
         cache_dir="./cache",
         db_path=str(db_path),
         use_quantized=True,  # Use quantized version for better performance
-        max_samples=50,  # Process 50 samples for testing
+        max_samples=5000,  # Process 50 samples for testing
     )
 
     # Create database

@@ -1,0 +1,61 @@
+[theme]
+# Light mode colors
+primaryColor = "#00d173"
+backgroundColor = "#eff1f5"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#4c4f69"
+
+# Dark mode colors
+[theme.dark]
+primaryColor = "#3affa7"
+backgroundColor = "#050505"
+secondaryBackgroundColor = "#1e1e2e"
+textColor = "#cdd6f4"
+
+# Font configuration
+font = "Montserrat, sans-serif"
+codeFont = "Fira Code, monospace"
+
+# Border radius
+baseRadius = "0.35rem"
+
+# Chart colors for both themes
+chartCategoricalColors = [
+    "#8839ef",  # chart-1
+    "#04a5e5",  # chart-2
+    "#40a02b",  # chart-3
+    "#fe640b",  # chart-4
+    "#dc8a78",  # chart-5
+]
+
+# Sequential colors for charts
+chartSequentialColors = [
+    "#e6e9ef",  # lightest
+    "#ccd0da",  # lighter
+    "#bcc0cc",  # light
+    "#9ca0b0",  # medium
+    "#7c7f93",  # medium-dark
+    "#5c5f77",  # dark
+    "#3c3f5b",  # darker
+    "#1c1f3f",  # darkest
+    "#0c0f2f",  # very dark
+    "#00001f"   # black
+]
+
+# Sidebar theme for light mode
+[theme.sidebar]
+primaryColor = "#00d173"
+backgroundColor = "#e6e9ef"
+secondaryBackgroundColor = "#ccd0da"
+textColor = "#4c4f69"
+codeBackgroundColor = "#dce0e8"
+borderColor = "#bcc0cc"
+
+# Sidebar theme for dark mode
+[theme.sidebar.dark]
+primaryColor = "#00d173"
+backgroundColor = "#11111b"
+secondaryBackgroundColor = "#292c3c"
+textColor = "#cdd6f4"
+codeBackgroundColor = "#313244"
+borderColor = "#00d173" 

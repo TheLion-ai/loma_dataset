@@ -19,6 +19,7 @@ CREATE TABLE documents (
     content TEXT NOT NULL,
     vector BLOB NOT NULL,
     created_at DATETIME NOT NULL,
+    url TEXT,
     year INTEGER,
     specialty TEXT
 );
@@ -33,6 +34,7 @@ CREATE TABLE documents (
 | `content` | TEXT | ✅ | Full content of the document |
 | `vector` | BLOB | ✅ | Vector embedding of the content |
 | `created_at` | DATETIME | ✅ | Timestamp when record was created |
+| `url` | TEXT | ❌ | Source URL of the document |
 | `year` | INTEGER | ❌ | Publication year |
 | `specialty` | TEXT | ❌ | Medical specialty (e.g., "Cardiology", "Oncology") |
 
@@ -102,17 +104,13 @@ class MedicalDocument:
     """Represents a medical research document/paper"""
     
     id: str
-    paper_title: str
-    source_url: str
-    passage_text: str
+    title: str
+    content: str
     vector: List[float]
-    created_at: str
+    created_at: datetime
+    url: Optional[str] = None
     year: Optional[int] = None
-    venue: Optional[str] = None
     specialty: Optional[str] = None
-    abstract: Optional[str] = None
-    authors: Optional[List[str]] = None
-    doi: Optional[str] = None
 ```
 
 ### MedicalQA
@@ -160,13 +158,15 @@ class DocumentSearchResult:
 - **Storage**: BLOB format (converted from float32 array)
 
 ### Embedding Content
-- **Q&A Vectors**: Generated from concatenated "Question: {question} Answer: {answer}" text
+- **Q&A Vectors**: Generated from question text only
 - **Document Vectors**: Generated from `passage_text` field content
 
 ### Vector Operations
-- **Similarity Metric**: Cosine similarity
+- **Normalization**: All embeddings are L2 normalized to unit vectors (magnitude = 1)
+- **Similarity Metric**: Cosine similarity (optimized for normalized vectors)
 - **Search Threshold**: Configurable (default: 0.0)
 - **Storage Format**: Float32 array serialized to BLOB
+- **Benefits**: L2 normalization ensures consistent similarity scores and enables efficient cosine similarity computation
 
 ## Relationships
 
@@ -214,11 +214,11 @@ db.initialize()
 # Add a document
 document = MedicalDocument(
     id="doc_001",
-    paper_title="Diabetes Management Guidelines",
-    source_url="https://example.com/diabetes-guidelines",
-    passage_text="Diabetes management requires comprehensive care including diet, exercise, and medication monitoring.",
+    title="Diabetes Management Guidelines",
+    content="Diabetes management requires comprehensive care including diet, exercise, and medication monitoring.",
     vector=embedding_model.encode("Diabetes management requires comprehensive care...").tolist(),
-    created_at="2023-01-15T10:30:00",
+    created_at=datetime.now(),
+    url="https://example.com/diabetes-guidelines",
     specialty="Endocrinology",
     year=2023
 )
@@ -229,7 +229,7 @@ qa = MedicalQA(
     id="qa_001",
     question="What are the symptoms of diabetes?",
     answer="Common symptoms include increased thirst, frequent urination, and unexplained weight loss.",
-    vector=embedding_model.encode("Question: What are the symptoms of diabetes? Answer: Common symptoms include increased thirst...").tolist(),
+    vector=embedding_model.encode("What are the symptoms of diabetes?").tolist(),
     document_id="doc_001",
     specialty="Endocrinology"
 )

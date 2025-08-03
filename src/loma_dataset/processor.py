@@ -25,6 +25,13 @@ except ImportError as e:
     raise ImportError(f"Missing required dependencies: {e}. "
                      "Please install: pip install datasets transformers huggingface_hub onnxruntime tqdm")
 
+# Optional sentence-transformers import
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+
 from .models import MedicalDocument, MedicalQA, ProcessingConfig
 from .database import MedicalVectorDB
 from .exceptions import ProcessingError, ConfigurationError
@@ -40,53 +47,91 @@ EMBEDDING_DIMENSION = 384
 
 class MedicalEmbeddingGenerator:
     """
-    Generates medical text embeddings using ONNX model.
+    Generates medical text embeddings using ONNX model or sentence-transformers.
     
     This class handles the loading and inference of medical text embedding models
-    optimized for medical domain text processing.
+    optimized for medical domain text processing. Supports both ONNX models for
+    faster inference and sentence-transformers for easier model usage.
     """
     
-    def __init__(self, model_name: str, use_quantized: bool = True, cache_dir: Optional[str] = None):
+    def __init__(self, model_name: str, use_quantized: bool = True, cache_dir: Optional[str] = None, 
+                 model_type: str = "auto"):
         """
         Initialize the embedding generator.
         
         Args:
             model_name: Name of the Hugging Face model
-            use_quantized: Whether to use quantized model for faster inference
+            use_quantized: Whether to use quantized model for faster inference (ONNX only)
             cache_dir: Directory to cache downloaded models
+            model_type: Type of model to use ("onnx", "sentence_transformers", or "auto")
+                       "auto" will try sentence-transformers first, then fall back to ONNX
         """
         self.model_name = model_name
         self.use_quantized = use_quantized
         self.cache_dir = cache_dir
+        self.model_type = model_type
         self.tokenizer = None
         self.session = None
+        self.sentence_model = None
         self.max_length = 512
+        self._actual_model_type = None
         
     def initialize(self) -> None:
-        """Initialize the tokenizer and ONNX session."""
+        """Initialize the embedding model (sentence-transformers or ONNX)."""
         try:
-            logger.info(f"Loading tokenizer from {self.model_name}")
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir
-            )
+            if self.model_type == "sentence_transformers":
+                self._initialize_sentence_transformers()
+            elif self.model_type == "onnx":
+                self._initialize_onnx()
+            elif self.model_type == "auto":
+                # Try sentence-transformers first, fall back to ONNX
+                try:
+                    self._initialize_sentence_transformers()
+                except Exception as e:
+                    logger.info(f"Sentence-transformers initialization failed, falling back to ONNX: {e}")
+                    self._initialize_onnx()
+            else:
+                raise ConfigurationError(f"Unknown model_type: {self.model_type}. "
+                                       "Use 'onnx', 'sentence_transformers', or 'auto'")
             
-            # Download and load ONNX model
-            model_filename = "model_quantized.onnx" if self.use_quantized else "model.onnx"
-            model_path = hf_hub_download(
-                repo_id=self.model_name,
-                filename=model_filename,
-                cache_dir=self.cache_dir
-            )
-            
-            logger.info(f"Loading ONNX model from {model_path}")
-            self.session = ort.InferenceSession(model_path)
-            
-            logger.info("Medical embedding generator initialized successfully")
+            logger.info(f"Medical embedding generator initialized successfully using {self._actual_model_type}")
             
         except Exception as e:
             logger.error(f"Failed to initialize embedding generator: {e}")
             raise ProcessingError(f"Failed to initialize embedding generator: {e}")
+    
+    def _initialize_sentence_transformers(self) -> None:
+        """Initialize using sentence-transformers."""
+        if not SENTENCE_TRANSFORMERS_AVAILABLE:
+            raise ProcessingError("sentence-transformers not available. "
+                                "Install with: pip install sentence-transformers")
+        
+        logger.info(f"Loading sentence-transformers model: {self.model_name}")
+        self.sentence_model = SentenceTransformer(
+            self.model_name,
+            cache_folder=self.cache_dir
+        )
+        self._actual_model_type = "sentence_transformers"
+    
+    def _initialize_onnx(self) -> None:
+        """Initialize using ONNX model."""
+        logger.info(f"Loading tokenizer from {self.model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.model_name,
+            cache_dir=self.cache_dir
+        )
+        
+        # Download and load ONNX model
+        model_filename = "model_quantized.onnx" if self.use_quantized else "model.onnx"
+        model_path = hf_hub_download(
+            repo_id=self.model_name,
+            filename=model_filename,
+            cache_dir=self.cache_dir
+        )
+        
+        logger.info(f"Loading ONNX model from {model_path}")
+        self.session = ort.InferenceSession(model_path)
+        self._actual_model_type = "onnx"
     
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
@@ -101,38 +146,66 @@ class MedicalEmbeddingGenerator:
         Raises:
             ProcessingError: If embedding generation fails
         """
-        if not self.tokenizer or not self.session:
+        if self._actual_model_type is None:
             raise ProcessingError("Embedding generator not initialized")
         
         try:
-            # Tokenize the batch
-            inputs = self.tokenizer(
-                texts,
-                padding=True,
-                truncation=True,
-                max_length=self.max_length,
-                return_tensors="np"
-            )
-            
-            # Run inference
-            outputs = self.session.run(None, dict(inputs))
-            embeddings = outputs[0]
-            
-            # Apply mean pooling if needed
-            if len(embeddings.shape) == 3:  # [batch, seq_len, hidden_dim]
-                attention_mask = inputs.get('attention_mask', np.ones(embeddings.shape[:2]))
-                attention_mask_expanded = np.expand_dims(attention_mask, -1)
-                embeddings = np.sum(embeddings * attention_mask_expanded, axis=1) / np.sum(attention_mask_expanded, axis=1)
-            
-            # Normalize embeddings
-            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-            embeddings = embeddings / (norms + 1e-8)
-            
-            return embeddings.tolist()
+            if self._actual_model_type == "sentence_transformers":
+                return self._generate_embeddings_sentence_transformers(texts)
+            elif self._actual_model_type == "onnx":
+                return self._generate_embeddings_onnx(texts)
+            else:
+                raise ProcessingError(f"Unknown model type: {self._actual_model_type}")
             
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
             raise ProcessingError(f"Failed to generate embeddings: {e}")
+    
+    def _generate_embeddings_sentence_transformers(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings using sentence-transformers."""
+        if not self.sentence_model:
+            raise ProcessingError("Sentence-transformers model not initialized")
+        
+        # Generate embeddings - sentence-transformers handles normalization by default
+        embeddings = self.sentence_model.encode(
+            texts,
+            convert_to_numpy=True,
+            normalize_embeddings=True  # Ensure L2 normalization
+        )
+        
+        return embeddings.tolist()
+    
+    def _generate_embeddings_onnx(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings using ONNX model."""
+        if not self.tokenizer or not self.session:
+            raise ProcessingError("ONNX model not initialized")
+        
+        # Tokenize the batch
+        inputs = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="np"
+        )
+        
+        # Run inference
+        outputs = self.session.run(None, dict(inputs))
+        embeddings = outputs[0]
+        
+        # Apply mean pooling if needed
+        if len(embeddings.shape) == 3:  # [batch, seq_len, hidden_dim]
+            attention_mask = inputs.get('attention_mask', np.ones(embeddings.shape[:2]))
+            attention_mask_expanded = np.expand_dims(attention_mask, -1)
+            embeddings = np.sum(embeddings * attention_mask_expanded, axis=1) / np.sum(attention_mask_expanded, axis=1)
+        
+        # L2 normalize embeddings to unit vectors for optimal cosine similarity
+        # This ensures all vectors have magnitude 1, making cosine similarity 
+        # equivalent to dot product and improving search consistency
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        embeddings = embeddings / (norms + 1e-8)  # Add epsilon to prevent division by zero
+        
+        return embeddings.tolist()
 
 
 class MiriadProcessor:
@@ -154,7 +227,9 @@ class MiriadProcessor:
         self.db = MedicalVectorDB(config.db_path)
         self.embedding_generator = MedicalEmbeddingGenerator(
             config.model_name,
-            config.use_quantized
+            config.use_quantized,
+            config.cache_dir,
+            config.model_type
         )
         self.processed_count = 0
         self.error_count = 0
@@ -280,7 +355,7 @@ class MiriadProcessor:
                 return
             
             # Generate embeddings
-            qa_texts = [f"Question: {qa['question']} Answer: {qa['answer']}" for qa in qa_data]
+            qa_texts = [qa['question'] for qa in qa_data]  # Use only the question for Q&A embeddings
             doc_texts = [doc['content'] for doc in doc_data]
             
             qa_embeddings = self.embedding_generator.generate_embeddings(qa_texts)
@@ -310,7 +385,8 @@ class MiriadProcessor:
                         title=doc_entry['title'],
                         content=doc_entry['content'],
                         vector=doc_vectors_map[doc_id],
-                        created_at=datetime.now().isoformat(),
+                        created_at=datetime.now(),
+                        url=doc_entry.get('url'),
                         specialty=doc_entry.get('specialty'),
                         year=doc_entry.get('year')
                     )
@@ -368,7 +444,7 @@ class MiriadProcessor:
             # Generate unique IDs
             question = safe_get_str('question')
             answer = safe_get_str('answer')
-            url = safe_get_str('url')
+            url = safe_get_str('paper_url')
             paper_title = safe_get_str('paper_title', 'Unknown')
             
             qa_id = self._generate_id(question + answer)
@@ -394,6 +470,7 @@ class MiriadProcessor:
                 'id': doc_id,
                 'title': paper_title,
                 'content': safe_get_str('passage_text', answer),
+                'url': url or None,
                 'specialty': safe_get_str('specialty') or None,
                 'year': year_value
             }

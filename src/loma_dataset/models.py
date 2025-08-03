@@ -26,6 +26,7 @@ class MedicalDocument:
         content: Full content of the document
         vector: Vector embedding of the content
         created_at: Timestamp when record was created
+        url: Source URL of the document (optional)
         year: Publication year (optional)
         specialty: Medical specialty (e.g., "Cardiology", "Oncology") (optional)
     """
@@ -35,6 +36,7 @@ class MedicalDocument:
     content: str
     vector: List[float]
     created_at: datetime
+    url: Optional[str] = None
     year: Optional[int] = None
     specialty: Optional[str] = None
 
@@ -142,9 +144,10 @@ class ProcessingConfig:
         device: Device to use for inference ('cpu' or 'cuda')
         cache_dir: Directory to cache models and data
         db_path: Path to the database file
-        use_quantized: Whether to use quantized models for inference
+        use_quantized: Whether to use quantized models for inference (ONNX only)
         max_samples: Maximum number of samples to process (None for all)
         skip_existing: Whether to skip existing entries in the database
+        model_type: Type of model to use ("onnx", "sentence_transformers", or "auto")
     """
     
     model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -156,6 +159,7 @@ class ProcessingConfig:
     use_quantized: bool = False
     max_samples: Optional[int] = None
     skip_existing: bool = True
+    model_type: str = "auto"
 
     def __post_init__(self):
         """Validate the configuration."""
@@ -171,3 +175,5 @@ class ProcessingConfig:
             raise ValidationError("Device must be 'cpu' or 'cuda'")
         if self.max_samples is not None and self.max_samples <= 0:
             raise ValidationError("Max samples must be positive")
+        if self.model_type not in ["onnx", "sentence_transformers", "auto"]:
+            raise ValidationError("Model type must be 'onnx', 'sentence_transformers', or 'auto'")

@@ -5,11 +5,13 @@ A high-quality Python package for managing medical Q&A data with vector search c
 ## Features
 
 - 🏥 **Medical-focused**: Optimized for medical Q&A data and terminology
-- 🔍 **Vector Search**: Advanced similarity search using medical text embeddings
+- 🔍 **Vector Search**: Advanced similarity search using L2 normalized medical text embeddings
 - 📊 **SQLite/libSQL**: Efficient database storage with full-text search
 - 🚀 **ONNX Optimized**: Fast inference using quantized ONNX models
+- 🤗 **Sentence Transformers**: Easy-to-use sentence-transformers integration with auto-fallback
 - 📦 **Easy to Use**: Simple API for data processing and retrieval
 - 🔧 **Configurable**: Flexible configuration for different use cases
+- ⚡ **L2 Normalized**: All embeddings are automatically L2 normalized for optimal cosine similarity
 
 ## Installation
 
@@ -18,6 +20,12 @@ A high-quality Python package for managing medical Q&A data with vector search c
 git clone <repository-url>
 cd loma_dataset
 pip install -e .
+
+# Install with sentence-transformers support (recommended)
+pip install -e ".[sentence-transformers]"
+
+# Install all optional dependencies
+pip install -e ".[all]"
 
 # Or install dependencies directly
 pip install -r requirements.txt
@@ -68,12 +76,13 @@ for result in results:
 ```python
 from loma_dataset import MiriadProcessor, ProcessingConfig
 
-# Configure processing
+# Configure processing with sentence-transformers (recommended)
 config = ProcessingConfig(
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_type="sentence_transformers",  # or "auto" for auto-detection
     max_samples=1000,  # Process 1000 samples for testing
     batch_size=32,
-    db_path="medical_qa.db",
-    use_quantized=True
+    db_path="medical_qa.db"
 )
 
 # Process dataset
@@ -84,6 +93,29 @@ processor.process_dataset()
 # Get statistics
 stats = processor.get_statistics()
 print(f"Processed: {stats['processed_count']} entries")
+```
+
+### Using Different Model Types
+
+```python
+# Option 1: Auto-detection (tries sentence-transformers first, falls back to ONNX)
+config_auto = ProcessingConfig(
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_type="auto"  # Default
+)
+
+# Option 2: Explicit sentence-transformers
+config_st = ProcessingConfig(
+    model_name="sentence-transformers/all-mpnet-base-v2",
+    model_type="sentence_transformers"
+)
+
+# Option 3: ONNX for faster inference
+config_onnx = ProcessingConfig(
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_type="onnx",
+    use_quantized=True
+)
 ```
 
 ## Project Structure
@@ -151,12 +183,14 @@ Processes MIRIAD dataset and generates embeddings.
 Configuration for dataset processing.
 
 **Parameters:**
+- `model_name`: Embedding model name (default: "sentence-transformers/all-MiniLM-L6-v2")
+- `model_type`: Model type - "auto", "sentence_transformers", or "onnx" (default: "auto")
 - `max_samples`: Limit number of samples (None for all)
 - `batch_size`: Processing batch size (default: 32)
 - `db_path`: Database file path
-- `model_name`: Embedding model name
-- `use_quantized`: Use quantized model (default: True)
+- `use_quantized`: Use quantized model for ONNX (default: False)
 - `skip_existing`: Skip existing entries (default: True)
+- `cache_dir`: Directory to cache models (default: "./cache")
 
 ## Database Schema
 
@@ -197,7 +231,8 @@ CREATE TABLE medical_qa (
 See the `examples/` directory for complete usage examples:
 
 - `basic_usage.py`: Basic database operations
-- `process_dataset.py`: MIRIAD dataset processing
+- `process_miriad.py`: MIRIAD dataset processing
+- `sentence_transformers_example.py`: Using sentence-transformers models
 - `search_examples.py`: Different search methods
 - `batch_processing.py`: Batch processing examples
 
