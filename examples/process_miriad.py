@@ -13,9 +13,10 @@ import logging
 from pathlib import Path
 
 from loma_dataset import MedicalVectorDB, MiriadProcessor, ProcessingConfig
+from alive_progress import alive_bar
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 
@@ -27,13 +28,13 @@ def main():
     # Configuration
     config = ProcessingConfig(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
-        batch_size=32,
+        batch_size=64,
         max_length=512,
         device="cpu",
         cache_dir="./cache",
         db_path=str(db_path),
         use_quantized=True,  # Use quantized version for better performance
-        max_samples=5000,  # Process 50 samples for testing
+        max_samples=500000,  # Process 50 samples for testing
     )
 
     # Create database
@@ -53,11 +54,27 @@ def main():
         # Load MIRIAD dataset
         logger.info("Loading MIRIAD dataset...")
         dataset = processor.load_dataset()
-        logger.info(f"Loaded {len(dataset)} entries from MIRIAD dataset")
+        total_items = len(dataset) if hasattr(dataset, "__len__") else None
+        logger.info(
+            f"Loaded {total_items if total_items is not None else '?'} entries from MIRIAD dataset"
+        )
 
-        # Process and populate database
+        # Process and populate database with progress bar
         logger.info("Processing dataset and populating database...")
-        processor.populate_database(db, dataset)
+        if total_items is not None:
+            with alive_bar(
+                total_items, title="Populating DB", spinner="dots_waves2"
+            ) as bar:
+                # If populate_database can take an iterable, iterate and step the bar
+                for item in dataset:
+                    processor.populate_database(db, [item])
+                    bar()
+        else:
+            # Fallback when length is unknown
+            with alive_bar(title="Populating DB (stream)", enrich_print=False) as bar:
+                for item in dataset:
+                    processor.populate_database(db, [item])
+                    bar()
 
         # Get database statistics
         stats = db.get_stats()
@@ -67,7 +84,11 @@ def main():
         logger.info("Performing example search...")
 
         # Search for documents about diabetes
-        diabetes_results = db.search_documents_text("diabetes treatment", limit=3)
+        with alive_bar(
+            1, title="Searching documents: diabetes treatment", spinner="classic"
+        ) as bar:
+            diabetes_results = db.search_documents_text("diabetes treatment", limit=3)
+            bar()
         logger.info(f"Found {len(diabetes_results)} documents about diabetes:")
         for result in diabetes_results:
             logger.info(
@@ -78,11 +99,17 @@ def main():
         if stats["qa_count"] > 0:
             # Generate embedding for search query
             embedding_generator = processor.embedding_generator
-            query_embedding = embedding_generator.generate_embeddings(
-                ["heart disease symptoms"]
-            )[0]
+            with alive_bar(
+                1, title="Generating query embedding", spinner="classic"
+            ) as bar:
+                query_embedding = embedding_generator.generate_embeddings(
+                    ["heart disease symptoms"]
+                )[0]
+                bar()
 
-            heart_results = db.search_similar_qa(query_embedding, limit=3)
+            with alive_bar(1, title="Searching similar Q&A", spinner="classic") as bar:
+                heart_results = db.search_similar_qa(query_embedding, limit=3)
+                bar()
             logger.info(f"Found {len(heart_results)} Q&A entries about heart disease:")
             for result in heart_results:
                 logger.info(

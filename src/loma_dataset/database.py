@@ -12,7 +12,12 @@ from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
 import logging
 
-from .models import MedicalDocument, MedicalQA, MedicalSearchResult, DocumentSearchResult
+from .models import (
+    MedicalDocument,
+    MedicalQA,
+    MedicalSearchResult,
+    DocumentSearchResult,
+)
 from .exceptions import DatabaseError, ValidationError
 
 # Configure logging
@@ -27,7 +32,7 @@ DEFAULT_SIMILARITY_THRESHOLD = 0.65
 class MedicalVectorDB:
     """
     Service for medical Q&A vector database operations using SQLite/libSQL.
-    
+
     This class provides comprehensive database operations including:
     - Document and Q&A storage with vector embeddings
     - Vector similarity search
@@ -38,7 +43,7 @@ class MedicalVectorDB:
     def __init__(self, db_path: str):
         """
         Initialize the database connection.
-        
+
         Args:
             db_path: Path to the SQLite database file
         """
@@ -53,18 +58,18 @@ class MedicalVectorDB:
 
         try:
             logger.info(f"Initializing Medical Vector DB at {self.db_path}")
-            
+
             # Connect to the database
             self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self.conn.execute("PRAGMA foreign_keys = ON")
-            
+
             # Create tables and indexes
             self._create_tables()
             self._create_indexes()
-            
+
             self.is_initialized = True
             logger.info("Medical Vector DB initialized successfully")
-            
+
         except Exception as error:
             logger.error(f"Failed to initialize Medical Vector DB: {error}")
             if self.conn:
@@ -88,19 +93,19 @@ class MedicalVectorDB:
 
         try:
             cursor = self.conn.cursor()
-            
+
             # Update statistics for query optimizer
             cursor.execute("ANALYZE")
-            
+
             # Vacuum database to reclaim space and optimize
             cursor.execute("VACUUM")
-            
+
             # Update index statistics
             cursor.execute("REINDEX")
-            
+
             self.conn.commit()
             logger.info("Database optimization completed successfully")
-            
+
         except Exception as error:
             logger.error(f"Error optimizing database: {error}")
             raise DatabaseError(f"Failed to optimize database: {error}")
@@ -112,18 +117,18 @@ class MedicalVectorDB:
 
         try:
             cursor = self.conn.cursor()
-            
+
             # Get page count and page size
             cursor.execute("PRAGMA page_count")
             page_count = cursor.fetchone()[0]
-            
+
             cursor.execute("PRAGMA page_size")
             page_size = cursor.fetchone()[0]
-            
+
             # Calculate total size
             total_size_bytes = page_count * page_size
             total_size_mb = total_size_bytes / (1024 * 1024)
-            
+
             # Get table sizes
             cursor.execute("""
                 SELECT name, COUNT(*) as row_count 
@@ -131,15 +136,15 @@ class MedicalVectorDB:
                 WHERE type='table' AND name IN ('documents', 'medical_qa')
             """)
             table_info = cursor.fetchall()
-            
+
             return {
                 "total_size_mb": round(total_size_mb, 2),
                 "total_size_bytes": total_size_bytes,
                 "page_count": page_count,
                 "page_size": page_size,
-                "tables": dict(table_info) if table_info else {}
+                "tables": dict(table_info) if table_info else {},
             }
-            
+
         except Exception as error:
             logger.error(f"Error getting database size: {error}")
             raise DatabaseError(f"Failed to get database size: {error}")
@@ -196,30 +201,30 @@ class MedicalVectorDB:
             # Create indexes for optimal performance with large datasets
             indexes = [
                 "CREATE INDEX IF NOT EXISTS medical_qa_document_id_idx ON medical_qa (document_id)",
-                "CREATE INDEX IF NOT EXISTS documents_specialty_idx ON documents (specialty)",
-                "CREATE INDEX IF NOT EXISTS documents_year_idx ON documents (year)",
-                "CREATE INDEX IF NOT EXISTS documents_created_at_idx ON documents (created_at)",
+                # "CREATE INDEX IF NOT EXISTS documents_specialty_idx ON documents (specialty)",
+                # "CREATE INDEX IF NOT EXISTS documents_year_idx ON documents (year)",
+                # "CREATE INDEX IF NOT EXISTS documents_created_at_idx ON documents (created_at)",
                 # Composite indexes for complex queries
-                "CREATE INDEX IF NOT EXISTS documents_specialty_year_idx ON documents (specialty, year)",
-                "CREATE INDEX IF NOT EXISTS medical_qa_doc_specialty_idx ON medical_qa (document_id) WHERE document_id IS NOT NULL",
+                # "CREATE INDEX IF NOT EXISTS documents_specialty_year_idx ON documents (specialty, year)",
+                # "CREATE INDEX IF NOT EXISTS medical_qa_doc_specialty_idx ON medical_qa (document_id) WHERE document_id IS NOT NULL",
                 # Primary key indexes (if not already exists)
                 "CREATE INDEX IF NOT EXISTS medical_qa_id_idx ON medical_qa (id)",
-                "CREATE INDEX IF NOT EXISTS documents_id_idx ON documents (id)"
+                "CREATE INDEX IF NOT EXISTS documents_id_idx ON documents (id)",
             ]
 
             for index_sql in indexes:
                 cursor.execute(index_sql)
 
             # Create full-text search virtual tables
-            cursor.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS medical_qa_fts 
-                USING fts5(question, answer, content='medical_qa')
-            """)
+            # cursor.execute("""
+            #     CREATE VIRTUAL TABLE IF NOT EXISTS medical_qa_fts
+            #     USING fts5(question, answer, content='medical_qa')
+            # """)
 
-            cursor.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts 
-                USING fts5(title, content, content='documents')
-            """)
+            # cursor.execute("""
+            #     CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts
+            #     USING fts5(title, content, content='documents')
+            # """)
 
             # Apply performance optimizations for large datasets
             performance_settings = [
@@ -228,14 +233,16 @@ class MedicalVectorDB:
                 "PRAGMA cache_size = -64000",  # 64MB cache
                 "PRAGMA temp_store = MEMORY",  # Use memory for temporary tables
                 "PRAGMA mmap_size = 268435456",  # 256MB memory map
-                "ANALYZE"  # Update query planner statistics
+                "ANALYZE",  # Update query planner statistics
             ]
 
             for pragma_sql in performance_settings:
                 cursor.execute(pragma_sql)
 
             self.conn.commit()
-            logger.info("Database indexes and performance optimizations applied successfully")
+            logger.info(
+                "Database indexes and performance optimizations applied successfully"
+            )
 
         except Exception as error:
             logger.error(f"Error creating indexes: {error}")
@@ -244,10 +251,10 @@ class MedicalVectorDB:
     def add_document(self, document: MedicalDocument) -> None:
         """
         Add a medical document to the database.
-        
+
         Args:
             document: MedicalDocument instance to add
-            
+
         Raises:
             DatabaseError: If database operation fails
             ValidationError: If document data is invalid
@@ -257,27 +264,38 @@ class MedicalVectorDB:
 
         try:
             cursor = self.conn.cursor()
-            
+
             # Convert vector to BLOB
             vector_blob = self._vector_to_blob(document.vector)
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR IGNORE INTO documents 
                 (id, title, content, vector, created_at, url, year, specialty)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, [
-                document.id, document.title, document.content,
-                vector_blob, document.created_at, document.url,
-                document.year, document.specialty
-            ])
+            """,
+                [
+                    document.id,
+                    document.title,
+                    document.content,
+                    vector_blob,
+                    document.created_at,
+                    document.url,
+                    document.year,
+                    document.specialty,
+                ],
+            )
 
-            # Update full-text search index
-            cursor.execute("""
-                INSERT OR IGNORE INTO documents_fts (rowid, title, content)
-                VALUES (
-                    (SELECT rowid FROM documents WHERE id = ?), ?, ?
-                )
-            """, [document.id, document.title, document.content])
+            # # Update full-text search index
+            # cursor.execute(
+            #     """
+            #     INSERT OR IGNORE INTO documents_fts (rowid, title, content)
+            #     VALUES (
+            #         (SELECT rowid FROM documents WHERE id = ?), ?, ?
+            #     )
+            # """,
+            #     [document.id, document.title, document.content],
+            # )
 
             self.conn.commit()
             logger.info(f"Document {document.id} added successfully")
@@ -289,10 +307,10 @@ class MedicalVectorDB:
     def add_qa(self, qa: MedicalQA) -> None:
         """
         Add a medical Q&A entry to the database.
-        
+
         Args:
             qa: MedicalQA instance to add
-            
+
         Raises:
             DatabaseError: If database operation fails
             ValidationError: If Q&A data is invalid
@@ -302,23 +320,29 @@ class MedicalVectorDB:
 
         try:
             cursor = self.conn.cursor()
-            
+
             # Convert vector to BLOB
             vector_blob = self._vector_to_blob(qa.vector)
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR REPLACE INTO medical_qa 
                 (id, question, answer, vector, document_id)
                 VALUES (?, ?, ?, ?, ?)
-            """, [qa.id, qa.question, qa.answer, vector_blob, qa.document_id])
+            """,
+                [qa.id, qa.question, qa.answer, vector_blob, qa.document_id],
+            )
 
             # Update full-text search index
-            cursor.execute("""
-                INSERT OR REPLACE INTO medical_qa_fts (rowid, question, answer)
-                VALUES (
-                    (SELECT rowid FROM medical_qa WHERE id = ?), ?, ?
-                )
-            """, [qa.id, qa.question, qa.answer])
+            # cursor.execute(
+            #     """
+            #     INSERT OR REPLACE INTO medical_qa_fts (rowid, question, answer)
+            #     VALUES (
+            #         (SELECT rowid FROM medical_qa WHERE id = ?), ?, ?
+            #     )
+            # """,
+            #     [qa.id, qa.question, qa.answer],
+            # )
 
             self.conn.commit()
             logger.info(f"Q&A entry {qa.id} added successfully")
@@ -336,16 +360,16 @@ class MedicalVectorDB:
     ) -> List[MedicalSearchResult]:
         """
         Search for similar medical Q&A entries using vector similarity.
-        
+
         Args:
             query_vector: Query vector for similarity search
             limit: Maximum number of results to return
             threshold: Minimum similarity threshold
             specialty: Optional specialty filter
-            
+
         Returns:
             List of MedicalSearchResult objects sorted by similarity
-            
+
         Raises:
             DatabaseError: If database operation fails
             ValidationError: If query parameters are invalid
@@ -361,7 +385,7 @@ class MedicalVectorDB:
 
         try:
             cursor = self.conn.cursor()
-            
+
             # Build query with optional specialty filter
             query = """
                 SELECT 
@@ -371,7 +395,7 @@ class MedicalVectorDB:
                 LEFT JOIN documents d ON mq.document_id = d.id
                 WHERE mq.vector IS NOT NULL
             """
-            
+
             params = []
             if specialty:
                 query += " AND d.specialty = ?"
@@ -392,19 +416,31 @@ class MedicalVectorDB:
 
                     if similarity >= threshold:
                         qa = MedicalQA(
-                            id=row[0], question=row[1], answer=row[2],
-                            vector=stored_vector, document_id=row[4]
+                            id=row[0],
+                            question=row[1],
+                            answer=row[2],
+                            vector=stored_vector,
+                            document_id=row[4],
                         )
 
                         document = None
                         if row[5]:  # title exists
                             document = MedicalDocument(
-                                id=row[4] or "", title=row[5], content=row[6],
+                                id=row[4] or "",
+                                title=row[5],
+                                content=row[6],
                                 vector=self._blob_to_vector(row[9]),
-                                created_at=row[10], url=row[11], year=row[7], specialty=row[8]
+                                created_at=row[10],
+                                url=row[11],
+                                year=row[7],
+                                specialty=row[8],
                             )
 
-                        results.append(MedicalSearchResult(qa=qa, similarity=similarity, document=document))
+                        results.append(
+                            MedicalSearchResult(
+                                qa=qa, similarity=similarity, document=document
+                            )
+                        )
 
                 except Exception as e:
                     logger.warning(f"Error processing row in similarity search: {e}")
@@ -427,16 +463,16 @@ class MedicalVectorDB:
     ) -> List[DocumentSearchResult]:
         """
         Search for similar documents using vector similarity.
-        
+
         Args:
             query_vector: Query vector for similarity search
             limit: Maximum number of results to return
             threshold: Minimum similarity threshold
             specialty: Optional specialty filter
-            
+
         Returns:
             List of DocumentSearchResult objects sorted by similarity
-            
+
         Raises:
             DatabaseError: If database operation fails
             ValidationError: If query parameters are invalid
@@ -444,8 +480,6 @@ class MedicalVectorDB:
         if not self.is_initialized or not self.conn:
             raise DatabaseError("Database not initialized")
 
-
-        
         try:
             if query_vector is None:
                 logger.error("Query vector is None")
@@ -459,14 +493,14 @@ class MedicalVectorDB:
 
         try:
             cursor = self.conn.cursor()
-            
+
             # Build query with optional specialty filter
             query = """
                 SELECT id, title, content, vector, created_at, url, year, specialty
                 FROM documents
                 WHERE vector IS NOT NULL
             """
-            
+
             params = []
             if specialty:
                 query += " AND specialty = ?"
@@ -490,15 +524,26 @@ class MedicalVectorDB:
 
                         if similarity >= threshold:
                             document = MedicalDocument(
-                                id=row[0], title=row[1] or "", content=row[2] or "",
-                                vector=doc_vector, created_at=row[4], url=row[5],
-                                year=row[6], specialty=row[7]
+                                id=row[0],
+                                title=row[1] or "",
+                                content=row[2] or "",
+                                vector=doc_vector,
+                                created_at=row[4],
+                                url=row[5],
+                                year=row[6],
+                                specialty=row[7],
                             )
 
-                            results.append(DocumentSearchResult(document=document, similarity=similarity))
+                            results.append(
+                                DocumentSearchResult(
+                                    document=document, similarity=similarity
+                                )
+                            )
 
                 except Exception as e:
-                    logger.warning(f"Error processing row in document similarity search: {e}")
+                    logger.warning(
+                        f"Error processing row in document similarity search: {e}"
+                    )
                     continue
 
             # Sort by similarity and limit results
@@ -507,7 +552,9 @@ class MedicalVectorDB:
 
         except Exception as error:
             logger.error(f"Error in document similarity search: {error}")
-            raise DatabaseError(f"Failed to perform document similarity search: {error}")
+            raise DatabaseError(
+                f"Failed to perform document similarity search: {error}"
+            )
 
     def search_documents_text(
         self,
@@ -517,15 +564,15 @@ class MedicalVectorDB:
     ) -> List[DocumentSearchResult]:
         """
         Search documents using full-text search.
-        
+
         Args:
             query: Text query for full-text search
             limit: Maximum number of results to return
             specialty: Optional specialty filter
-            
+
         Returns:
             List of DocumentSearchResult objects
-            
+
         Raises:
             DatabaseError: If database operation fails
             ValidationError: If query parameters are invalid
@@ -538,7 +585,7 @@ class MedicalVectorDB:
 
         try:
             cursor = self.conn.cursor()
-            
+
             # Build query with optional specialty filter
             sql_query = """
                 SELECT d.id, d.title, d.content, d.vector, d.created_at, d.year, d.specialty, d.url
@@ -546,12 +593,12 @@ class MedicalVectorDB:
                 JOIN documents_fts fts ON d.rowid = fts.rowid
                 WHERE documents_fts MATCH ?
             """
-            
+
             params = [query]
             if specialty:
                 sql_query += " AND d.specialty = ?"
                 params.append(specialty)
-                
+
             sql_query += " ORDER BY rank LIMIT ?"
             params.append(limit)
 
@@ -563,11 +610,18 @@ class MedicalVectorDB:
             for row in rows:
                 try:
                     document = MedicalDocument(
-                        id=row[0], title=row[1] or "", content=row[2] or "",
+                        id=row[0],
+                        title=row[1] or "",
+                        content=row[2] or "",
                         vector=self._blob_to_vector(row[3]) if row[3] else [],
-                        created_at=row[4], year=row[5], specialty=row[6], url=row[7]
+                        created_at=row[4],
+                        year=row[5],
+                        specialty=row[6],
+                        url=row[7],
                     )
-                    results.append(DocumentSearchResult(document=document, similarity=1.0))
+                    results.append(
+                        DocumentSearchResult(document=document, similarity=1.0)
+                    )
 
                 except Exception as e:
                     logger.warning(f"Error processing row in text search: {e}")
@@ -587,15 +641,15 @@ class MedicalVectorDB:
     ) -> List[MedicalSearchResult]:
         """
         Search Q&A entries using full-text search.
-        
+
         Args:
             query: Text query for full-text search
             limit: Maximum number of results to return
             specialty: Optional specialty filter
-            
+
         Returns:
             List of MedicalSearchResult objects
-            
+
         Raises:
             DatabaseError: If database operation fails
             ValidationError: If query parameters are invalid
@@ -608,7 +662,7 @@ class MedicalVectorDB:
 
         try:
             cursor = self.conn.cursor()
-            
+
             # Build query with optional specialty filter
             sql_query = """
                 SELECT 
@@ -619,12 +673,12 @@ class MedicalVectorDB:
                 LEFT JOIN documents d ON mq.document_id = d.id
                 WHERE medical_qa_fts MATCH ?
             """
-            
+
             params = [query]
             if specialty:
                 sql_query += " AND d.specialty = ?"
                 params.append(specialty)
-                
+
             sql_query += " ORDER BY rank LIMIT ?"
             params.append(limit)
 
@@ -640,9 +694,11 @@ class MedicalVectorDB:
                         vector = self._blob_to_vector(row[3])
                         if vector:  # vector is not empty
                             qa = MedicalQA(
-                                id=row[0], question=row[1], answer=row[2],
+                                id=row[0],
+                                question=row[1],
+                                answer=row[2],
                                 vector=vector,
-                                document_id=row[4]
+                                document_id=row[4],
                             )
                         else:
                             continue  # Skip this row if vector is empty
@@ -656,12 +712,19 @@ class MedicalVectorDB:
                             doc_vector = self._blob_to_vector(row[9])
                             if doc_vector:  # vector is not empty
                                 document = MedicalDocument(
-                                    id=row[4] or "", title=row[5], content=row[6],
+                                    id=row[4] or "",
+                                    title=row[5],
+                                    content=row[6],
                                     vector=doc_vector,
-                                    created_at=row[10], year=row[7], specialty=row[8], url=row[11]
+                                    created_at=row[10],
+                                    year=row[7],
+                                    specialty=row[8],
+                                    url=row[11],
                                 )
 
-                    results.append(MedicalSearchResult(qa=qa, similarity=1.0, document=document))
+                    results.append(
+                        MedicalSearchResult(qa=qa, similarity=1.0, document=document)
+                    )
 
                 except Exception as e:
                     logger.warning(f"Error processing row in Q&A text search: {e}")
@@ -676,7 +739,7 @@ class MedicalVectorDB:
     def get_stats(self) -> Dict[str, Any]:
         """
         Get database statistics.
-        
+
         Returns:
             Dictionary containing database statistics
         """
@@ -685,27 +748,29 @@ class MedicalVectorDB:
 
         try:
             cursor = self.conn.cursor()
-            
+
             # Get counts
             cursor.execute("SELECT COUNT(*) FROM medical_qa")
             total_qa = cursor.fetchone()[0]
-            
+
             cursor.execute("SELECT COUNT(*) FROM documents")
             total_documents = cursor.fetchone()[0]
-            
+
             # Get specialties from documents only (medical_qa no longer has specialty)
-            cursor.execute("SELECT DISTINCT specialty FROM documents WHERE specialty IS NOT NULL")
+            cursor.execute(
+                "SELECT DISTINCT specialty FROM documents WHERE specialty IS NOT NULL"
+            )
             doc_specialties = [row[0] for row in cursor.fetchall()]
-            
+
             return {
                 "qa_count": total_qa,
                 "document_count": total_documents,
                 "total_qa": total_qa,  # Keep for backward compatibility
                 "total_documents": total_documents,  # Keep for backward compatibility
                 "specialties": doc_specialties,
-                "database_path": self.db_path
+                "database_path": self.db_path,
             }
-            
+
         except Exception as error:
             logger.error(f"Error getting statistics: {error}")
             raise DatabaseError(f"Failed to get database statistics: {error}")
@@ -721,22 +786,22 @@ class MedicalVectorDB:
     def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
         """
         Calculate cosine similarity between two vectors.
-        
-        Optimized for L2 normalized vectors where cosine similarity 
+
+        Optimized for L2 normalized vectors where cosine similarity
         reduces to dot product since ||a|| = ||b|| = 1.
         """
         dot_product = np.dot(a, b)
         norm_a = np.linalg.norm(a)
         norm_b = np.linalg.norm(b)
-        
+
         # Handle edge cases
         if norm_a == 0 or norm_b == 0:
             return 0.0
-        
+
         # For L2 normalized vectors, this should be close to just dot_product
         # but we keep the full calculation for robustness
         similarity = float(dot_product / (norm_a * norm_b))
-        
+
         # Clip to valid range [0.0, 1.0] to handle floating-point precision issues
         return max(0.0, min(1.0, similarity))
 

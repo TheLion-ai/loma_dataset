@@ -174,3 +174,5 @@ miriad_*.db
 *.db
 *.db-shm
 *.db-wal
+*.db-journal
+*_checkpoint.json
