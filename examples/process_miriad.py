@@ -28,13 +28,14 @@ def main():
     # Configuration
     config = ProcessingConfig(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
-        batch_size=64,
+        batch_size=256,
         max_length=512,
         device="cpu",
         cache_dir="./cache",
         db_path=str(db_path),
-        use_quantized=True,  # Use quantized version for better performance
+        use_quantized=False,  # Use quantized version for better performance
         max_samples=500000,  # Process 50 samples for testing
+        model_type="sentence_transformers",
     )
 
     # Create database
