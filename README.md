@@ -1,98 +1,144 @@
 # LOMA Dataset - Medical Q&A Vector Database
 
-A high-quality Python package for managing medical Q&A data with vector search capabilities, specifically designed for processing the MIRIAD medical dataset.
+A comprehensive Python package for managing medical Q&A data with vector search capabilities, specifically designed as the database backend for the [LOMA (Local Offline Medical Assistant)](https://github.com/TheLion-ai/LOMA) mobile application. <mcreference link="https://github.com/TheLion-ai/LOMA" index="0">0</mcreference>
+
+This package processes and serves the [MIRIAD medical dataset](https://huggingface.co/datasets/miriad/miriad-5.8M) containing 5.8M medical Q&A pairs, providing a robust foundation for medical AI applications. <mcreference link="https://huggingface.co/datasets/miriad/miriad-5.8M" index="1">1</mcreference>
 
 ## Features
 
-- 🏥 **Medical-focused**: Optimized for medical Q&A data and terminology
-- 🔍 **Vector Search**: Advanced similarity search using L2 normalized medical text embeddings
-- 📊 **SQLite/libSQL**: Efficient database storage with full-text search
-- 🚀 **ONNX Optimized**: Fast inference using quantized ONNX models
-- 🤗 **Sentence Transformers**: Easy-to-use sentence-transformers integration with auto-fallback
-- 📦 **Easy to Use**: Simple API for data processing and retrieval
-- 🔧 **Configurable**: Flexible configuration for different use cases
-- ⚡ **L2 Normalized**: All embeddings are automatically L2 normalized for optimal cosine similarity
+- 🏥 **Medical-focused**: Optimized for medical Q&A data and terminology from MIRIAD dataset
+- 🔍 **Vector Search**: Advanced similarity search using 384-dimensional embeddings with cosine similarity
+- 📊 **SQLite Database**: Efficient storage with vector search capabilities and full-text indexing
+- 🚀 **Sentence Transformers**: Integration with sentence-transformers models (all-MiniLM-L6-v2)
+- 📱 **LOMA Integration**: Designed as the backend database for LOMA mobile medical assistant
+- 🌐 **Streamlit App**: Interactive web interface for database exploration and management
+- 📦 **Easy to Use**: Simple API for data processing, search, and retrieval
+- 🔧 **Configurable**: Flexible configuration for different embedding models and processing options
+- ⚡ **Optimized Performance**: Database optimizations for handling large medical datasets (500k+ entries)
 
 ## Installation
 
 ```bash
-# Install from source
-git clone <repository-url>
-cd loma_dataset
+# Clone the repository
+git clone https://github.com/TheLion-ai/LOMA.git
+cd LOMA/loma_dataset
+
+# Install the package
 pip install -e .
 
-# Install with sentence-transformers support (recommended)
-pip install -e ".[sentence-transformers]"
-
-# Install all optional dependencies
-pip install -e ".[all]"
-
-# Or install dependencies directly
-pip install -r requirements.txt
+# Install with all dependencies (recommended)
+pip install sentence-transformers streamlit plotly pandas numpy
 ```
 
 ## Quick Start
 
-### Basic Usage
+### 1. Download Pre-built Database
+
+The easiest way to get started is to download a pre-built database:
+
+```python
+# Download the MIRIAD database (500k entries)
+python examples/download_db.py
+```
+
+### 2. Run the Streamlit Web App
+
+Launch the interactive web interface to explore the medical database:
+
+```bash
+streamlit run app.py
+```
+
+This will start a web application at `http://localhost:8501` with the following features:
+- **Dashboard**: Overview of database statistics and medical specialties
+- **Search & Browse**: Semantic search, full-text search, and SQL queries
+- **Document Submission**: Add new medical documents to the database
+- **Analytics**: Database insights and specialty distributions
+
+### 3. Basic Python API Usage
 
 ```python
 from loma_dataset import MedicalVectorDB, MedicalDocument, MedicalQA
+from datetime import datetime
 
 # Initialize database
-db = MedicalVectorDB("medical_qa.db")
+db = MedicalVectorDB("miriad_medical_minlm.db")
 db.initialize()
 
 # Add a document
 document = MedicalDocument(
     id="doc_001",
-    paper_title="Diabetes Management Guidelines",
-    source_url="https://example.com/diabetes-guidelines",
-    passage_text="Diabetes management requires comprehensive care...",
-    vector=[0.1] * 384,  # Your embedding vector
-    created_at="2023-01-15T10:30:00"
+    title="Hypertension Management",
+    content="Hypertension is a common cardiovascular condition...",
+    vector=[0.1] * 384,  # 384-dimensional embedding vector
+    created_at=datetime.now(),
+    url="https://example.com/hypertension",
+    year=2024,
+    specialty="Cardiology"
 )
 db.add_document(document)
 
 # Add Q&A
 qa = MedicalQA(
     id="qa_001",
-    question="What are the symptoms of diabetes?",
-    answer="Common symptoms include increased thirst...",
-    vector=[0.2] * 384,  # Your embedding vector
+    question="What is hypertension?",
+    answer="Hypertension is high blood pressure that can lead to serious health complications.",
+    vector=[0.2] * 384,  # 384-dimensional embedding vector
     document_id="doc_001"
 )
 db.add_qa(qa)
 
-# Search similar Q&A
-results = db.search_similar_qa(query_vector, limit=5)
+# Search similar Q&A entries
+results = db.search_similar_qa(query_vector, limit=5, threshold=0.65)
 for result in results:
     print(f"Q: {result.qa.question}")
     print(f"A: {result.qa.answer}")
     print(f"Similarity: {result.similarity:.3f}")
+
+# Get database statistics
+stats = db.get_stats()
+print(f"Total Q&A entries: {stats['qa_count']}")
+print(f"Total documents: {stats['document_count']}")
+print(f"Medical specialties: {len(stats['specialties'])}")
 ```
 
-### Processing MIRIAD Dataset
+### 4. Processing MIRIAD Dataset from Scratch
+
+To process the full MIRIAD dataset and create your own database:
 
 ```python
 from loma_dataset import MiriadProcessor, ProcessingConfig
 
-# Configure processing with sentence-transformers (recommended)
+# Configure processing with sentence-transformers
 config = ProcessingConfig(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_type="sentence_transformers",  # or "auto" for auto-detection
-    max_samples=1000,  # Process 1000 samples for testing
-    batch_size=32,
-    db_path="medical_qa.db"
+    model_type="sentence_transformers",
+    max_samples=500000,  # Process 500k samples (or None for all 5.8M)
+    batch_size=256,
+    db_path="miriad_medical_minlm.db",
+    cache_dir="./cache"
 )
 
-# Process dataset
+# Initialize processor and database
 processor = MiriadProcessor(config)
 processor.initialize()
-processor.process_dataset()
 
-# Get statistics
-stats = processor.get_statistics()
-print(f"Processed: {stats['processed_count']} entries")
+# Load and process the MIRIAD dataset
+dataset = processor.load_dataset()
+print(f"Loaded {len(dataset)} entries from MIRIAD dataset")
+
+# Process with progress tracking
+from alive_progress import alive_bar
+with alive_bar(len(dataset), title="Processing MIRIAD") as bar:
+    for item in dataset:
+        processor.populate_database(db, [item])
+        bar()
+
+# Get final statistics
+stats = db.get_stats()
+print(f"Processed: {stats['qa_count']} Q&A entries")
+print(f"Documents: {stats['document_count']}")
+print(f"Specialties: {len(stats['specialties'])}")
 ```
 
 ### Using Different Model Types
@@ -135,47 +181,78 @@ loma_dataset/
 └── README.md                # This file
 ```
 
+## Streamlit Web Application
+
+The package includes a comprehensive Streamlit web application for database exploration and management:
+
+### Features
+
+- **📊 Dashboard**: Database overview with statistics and specialty distributions
+- **🔍 Search & Browse**: Multiple search modes including:
+  - Semantic search using vector embeddings
+  - Full-text search with boolean operators
+  - SQL query interface for advanced users
+  - Hybrid search combining multiple approaches
+- **📄 Document Submission**: Add new medical documents to the database
+- **📈 Analytics**: Database insights and medical specialty analysis
+
+### Running the App
+
+```bash
+streamlit run app.py
+```
+
+The app will be available at `http://localhost:8501`
+
 ## API Reference
 
 ### Core Classes
 
 #### `MedicalVectorDB`
-Main database interface for storing and retrieving medical data.
+Main database interface for storing and retrieving medical data with vector search capabilities.
 
-**Methods:**
-- `initialize()`: Initialize database and create tables
-- `add_document(document)`: Add a medical document
-- `add_qa(qa)`: Add a Q&A entry
-- `search_similar_qa(vector, limit, threshold)`: Vector similarity search
-- `get_stats()`: Get database statistics
+**Key Methods:**
+- `initialize()`: Initialize database and create optimized tables/indexes
+- `add_document(document)`: Add a medical document with vector embedding
+- `add_qa(qa)`: Add a Q&A entry with vector embedding
+- `search_similar_qa(vector, limit, threshold, specialty)`: Vector similarity search for Q&A
+- `search_similar_documents(vector, limit, threshold, specialty)`: Vector similarity search for documents
+- `search_documents_text(query, limit, specialty)`: Full-text search in documents
+- `get_stats()`: Get comprehensive database statistics
+- `optimize_database()`: Optimize database performance for large datasets
+- `get_database_size()`: Get database size information
 
 #### `MedicalDocument`
-Represents a medical research document.
+Represents a medical research document with vector embedding.
 
 **Required Fields:**
 - `id`: Unique identifier
-- `paper_title`: Document title
-- `source_url`: URL to source
-- `passage_text`: Text content
-- `vector`: Embedding vector (384-dim)
+- `title`: Document title
+- `content`: Full document content
+- `vector`: 384-dimensional embedding vector
 - `created_at`: Creation timestamp
+- `url`: Source URL (optional)
+- `year`: Publication year (optional)
+- `specialty`: Medical specialty (optional)
 
 #### `MedicalQA`
-Represents a medical Q&A entry.
+Represents a medical Q&A entry with vector embedding.
 
 **Required Fields:**
 - `id`: Unique identifier
 - `question`: Medical question
 - `answer`: Corresponding answer
-- `vector`: Embedding vector (384-dim)
+- `vector`: 384-dimensional embedding vector
+- `document_id`: Reference to source document
 
 #### `MiriadProcessor`
-Processes MIRIAD dataset and generates embeddings.
+Processes MIRIAD dataset and generates embeddings using sentence-transformers.
 
-**Methods:**
-- `initialize()`: Setup processor and models
-- `process_dataset()`: Process complete dataset
-- `get_statistics()`: Get processing stats
+**Key Methods:**
+- `initialize()`: Setup processor and embedding models
+- `load_dataset()`: Load MIRIAD dataset from Hugging Face
+- `populate_database(db, items)`: Process and add items to database
+- `get_statistics()`: Get processing statistics
 
 ### Configuration
 
@@ -194,21 +271,19 @@ Configuration for dataset processing.
 
 ## Database Schema
 
+The database uses SQLite with optimized indexes for vector similarity search and large dataset performance.
+
 ### Documents Table
 ```sql
 CREATE TABLE documents (
     id TEXT PRIMARY KEY,
-    paper_title TEXT NOT NULL,
-    source_url TEXT NOT NULL,
-    passage_text TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
     vector BLOB NOT NULL,
     created_at DATETIME NOT NULL,
+    url TEXT,
     year INTEGER,
-    venue TEXT,
-    specialty TEXT,
-    abstract TEXT,
-    authors TEXT,
-    doi TEXT
+    specialty TEXT
 );
 ```
 
@@ -219,22 +294,79 @@ CREATE TABLE medical_qa (
     question TEXT NOT NULL,
     answer TEXT NOT NULL,
     vector BLOB NOT NULL,
-    document_id TEXT,
-    specialty TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (document_id) REFERENCES documents(id)
+    document_id TEXT NOT NULL,
+    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 ```
 
+### Performance Optimizations
+
+The database includes several optimizations for handling large medical datasets:
+
+- **Vector Storage**: Efficient BLOB storage for 384-dimensional embeddings
+- **Indexes**: Optimized indexes on document_id, specialty, and year fields
+- **WAL Mode**: Write-Ahead Logging for better concurrency
+- **Memory Mapping**: 256MB memory map for faster access
+- **Cache Configuration**: 64MB cache for improved query performance
+
 ## Examples
 
-See the `examples/` directory for complete usage examples:
+The `examples/` directory contains comprehensive usage examples:
 
-- `basic_usage.py`: Basic database operations
-- `process_miriad.py`: MIRIAD dataset processing
-- `sentence_transformers_example.py`: Using sentence-transformers models
-- `search_examples.py`: Different search methods
-- `batch_processing.py`: Batch processing examples
+- **`basic_usage.py`**: Basic database operations and API usage
+- **`download_db.py`**: Download pre-built MIRIAD database from cloud storage
+- **`process_miriad.py`**: Complete MIRIAD dataset processing pipeline
+- **`sentence_transformers_example.py`**: Using sentence-transformers for embeddings
+- **`upload_db.py`**: Upload processed database to cloud storage
+
+### Running Examples
+
+```bash
+# Download pre-built database (recommended for quick start)
+python examples/download_db.py
+
+# Process MIRIAD dataset from scratch (requires significant time/resources)
+python examples/process_miriad.py
+
+# Basic API usage demonstration
+python examples/basic_usage.py
+
+# Sentence transformers integration example
+python examples/sentence_transformers_example.py
+```
+
+## LOMA Integration
+
+This package serves as the database backend for the [LOMA (Local Offline Medical Assistant)](https://github.com/TheLion-ai/LOMA) mobile application. <mcreference link="https://github.com/TheLion-ai/LOMA" index="0">0</mcreference> LOMA is a React Native medical AI assistant that:
+
+- **Runs Completely Offline**: All AI processing happens locally on mobile devices
+- **Uses Gemma 3n Model**: Lightweight language model optimized for mobile inference
+- **Provides RAG Capabilities**: Retrieval-Augmented Generation using this medical database
+- **Supports iOS and Android**: Cross-platform mobile medical assistance
+- **Maintains Privacy**: No data leaves the device, ensuring HIPAA-friendly operation
+
+The database created by this package is downloaded and used by LOMA for:
+- Semantic search through medical knowledge
+- Context injection for AI responses
+- Source citation for medical information
+- Specialty-specific medical queries
+
+## MIRIAD Dataset
+
+This package processes the [MIRIAD (Medical Information Retrieval in Argumentative Dialogues) dataset](https://huggingface.co/datasets/miriad/miriad-5.8M), which contains: <mcreference link="https://huggingface.co/datasets/miriad/miriad-5.8M" index="1">1</mcreference>
+
+- **5.8 Million Q&A Pairs**: Comprehensive medical question-answer pairs
+- **54 Medical Specialties**: Coverage across all major medical fields including cardiology, oncology, neurology, etc.
+- **Research Paper Sources**: Q&A pairs derived from peer-reviewed medical literature
+- **Structured Format**: Consistent format with questions, answers, paper metadata, and specialty classifications
+- **Quality Controlled**: Curated from reputable medical sources and publications
+
+### Dataset Statistics
+- **Total Entries**: 5.82M medical Q&A pairs
+- **Specialties**: 54 different medical specialties
+- **Time Range**: Publications from 1990-2024
+- **Languages**: Primarily English medical content
+- **Vector Dimensions**: 384-dimensional embeddings using all-MiniLM-L6-v2
 
 ## Development
 
@@ -284,8 +416,25 @@ If you use this package in your research, please cite:
 ```bibtex
 @software{loma_dataset,
   title={LOMA Dataset: Medical Q&A Vector Database},
-  author={LOMA Dataset Team},
+  author={TheLion.ai},
   year={2024},
-  url={https://github.com/your-org/loma-dataset}
+  url={https://github.com/TheLion-ai/LOMA}
 }
 ```
+
+If you use the MIRIAD dataset, please also cite:
+
+```bibtex
+@dataset{miriad_dataset,
+  title={MIRIAD: Medical Information Retrieval in Argumentative Dialogues},
+  author={MIRIAD Team},
+  year={2024},
+  url={https://huggingface.co/datasets/miriad/miriad-5.8M}
+}
+```
+
+## Related Projects
+
+- **[LOMA Mobile App](https://github.com/TheLion-ai/LOMA)**: React Native medical AI assistant using this database
+- **[MIRIAD Dataset](https://huggingface.co/datasets/miriad/miriad-5.8M)**: Source medical Q&A dataset
+- **[Sentence Transformers](https://www.sbert.net/)**: Embedding models used for vector search
