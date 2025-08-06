@@ -22,7 +22,7 @@ except ImportError as e:
     st.stop()
 
 # Import page modules
-from pages import dashboard, edit, analytics, unified_search
+from pages import dashboard, analytics, unified_search, document_submission
 
 # Configure Streamlit page
 st.set_page_config(
@@ -50,6 +50,8 @@ if "search_results" not in st.session_state:
 if "edit_mode" not in st.session_state:
     st.session_state.edit_mode = False
 
+# Initialize session state for application
+
 
 def initialize_database():
     """Initialize the database connection for the current session."""
@@ -67,9 +69,9 @@ def initialize_embedding_generator():
     """Initialize and cache the embedding generator."""
     try:
         generator = MedicalEmbeddingGenerator(
-            DEFAULT_MODEL, 
+            DEFAULT_MODEL,
             use_quantized=False,  # Not relevant for sentence-transformers
-            model_type="auto"     # Use auto mode for sentence-transformers with ONNX fallback
+            model_type="auto",  # Use auto mode for sentence-transformers with ONNX fallback
         )
         generator.initialize()
         return generator
@@ -100,7 +102,12 @@ def main():
         st.Page(
             unified_search.show, title="Search & Browse", icon="🔍", url_path="search"
         ),
-        st.Page(edit.show, title="Edit Data", icon="📝", url_path="edit"),
+        st.Page(
+            document_submission.show,
+            title="Submit Documents",
+            icon="📄",
+            url_path="submit",
+        ),
         st.Page(analytics.show, title="Analytics", icon="📈", url_path="analytics"),
     ]
 
@@ -109,7 +116,8 @@ def main():
 
     # Show database stats in sidebar
     with st.sidebar:
-        st.header("Database Statistics")
+        # Database statistics section
+        st.header("📊 Database Statistics")
         try:
             stats = st.session_state.db.get_stats()
             st.metric("Q&A Entries", stats["qa_count"])
@@ -117,6 +125,11 @@ def main():
             st.metric("Specialties", len(stats["specialties"]))
         except Exception as e:
             st.error(f"Error getting stats: {e}")
+        
+        st.divider()
+        
+        # Application info
+
 
     # Run the selected page
     pg.run()

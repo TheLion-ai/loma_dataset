@@ -43,6 +43,8 @@ dependencies = [
     "sentence-transformers>=3.2.1",
     "boto3>=1.37.38",
     "python-dotenv>=1.0.1",
+    "litellm>=1.0.0",
+    "pyyaml>=6.0.2",
 ]
 
 [project.optional-dependencies]
